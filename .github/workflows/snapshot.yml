@@ -35,8 +35,8 @@ jobs:
           # Valid JSON?
           jq -e . /tmp/ticker.json > /dev/null
 
-      # 2) Prepare base historical file if missing; validate existing
-      - name: Init or validate historical.json
+      # 2) Prepare base snapshots file if missing; validate existing
+      - name: Init or validate snapshots.json
         run: |
           set -euo pipefail
           if [ ! -f "$HIST_FILE" ]; then
@@ -86,8 +86,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$(date -u +%d)" = "01" ]; then
-            cp "$HIST_FILE" "backups/historical-$(date -u +%Y-%m).json"
-            echo "Created backups/historical-$(date -u +%Y-%m).json"
+            cp "$HIST_FILE" "backups/snapshots-$(date -u +%Y-%m).json"
+            echo "Created backups/snapshots-$(date -u +%Y-%m).json"
           fi
 
       # 6) Commit only if there are changes
