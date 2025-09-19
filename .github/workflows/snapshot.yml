@@ -13,7 +13,7 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     env:
-      HIST_FILE: historical.json
+      HIST_FILE: snapshots.json
       SRC_URL: https://blockchain.info/ticker
       # Bind secret to env (avoids using `secrets` in `if:` expressions)
       NETLIFY_BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
