@@ -11,15 +11,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Ensure history file exists
-        run: test -f history/historical.json
+        run: test -f historical.json
 
       - name: Parse JSON
-        run: jq -e . history/historical.json > /dev/null
+        run: jq -e . historical.json > /dev/null
 
       - name: Basic schema keys
         run: |
-          jq -e 'has("version") and has("source") and has("frequency") and has("snapshots")' history/historical.json | grep -qx true
+          jq -e 'has("version") and has("source") and has("frequency") and has("snapshots")' historical.json | grep -qx true
 
       - name: Snapshots is array
         run: |
-          jq -e '.snapshots | type=="array"' history/historical.json | grep -qx true
+          jq -e '.snapshots | type=="array"' historical.json | grep -qx true
