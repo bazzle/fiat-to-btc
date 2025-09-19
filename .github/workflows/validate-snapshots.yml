@@ -1,0 +1,25 @@
+name: validate-snapshots
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure history file exists
+        run: test -f snapshots.json
+
+      - name: Parse JSON
+        run: jq -e . snapshots.json > /dev/null
+
+      - name: Basic schema keys
+        run: |
+          jq -e 'has("version") and has("source") and has("frequency") and has("snapshots")' snapshots.json | grep -qx true
+
+      - name: Snapshots is array
+        run: |
+          jq -e '.snapshots | type=="array"' snapshots.json | grep -qx true
