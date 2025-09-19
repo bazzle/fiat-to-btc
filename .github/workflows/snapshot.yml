@@ -66,9 +66,10 @@ jobs:
           TMP_OUT="$(mktemp)"
           # Remove any existing entry with the same date, append the new one, sort by date
           jq -c --slurpfile snap /tmp/snapshot.json '
-            .snapshots |= ( [ .snapshots[] | select(.date != $snap[0].date) ] + $snap ) |
-            .snapshots |= sort_by(.date)
+            .snapshots = (((.snapshots // []) | map(select(.date != $snap[0].date))) + $snap)
+            | .snapshots |= sort_by(.date)
           ' "$HIST_FILE" > "$TMP_OUT"
+
 
           # Validate output again (structure + monotonic sort sanity)
           jq -e 'has("version") and has("source") and has("frequency") and has("snapshots") and (.snapshots | type=="array")' "$TMP_OUT" > /dev/null
