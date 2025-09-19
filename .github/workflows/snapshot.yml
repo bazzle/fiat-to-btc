@@ -111,7 +111,7 @@ jobs:
           set -euo pipefail
           if [ -n "${NETLIFY_BUILD_HOOK:-}" ]; then
             echo "Triggering Netlify build hook at $(date -u --iso-8601=seconds)..."
-            curl -sS -X POST -d '{}' "$NETLIFY_BUILD_HOOK" || true
+            curl -sS --fail-with-body -H 'Content-Type: application/json' -d '{}' "$NETLIFY_BUILD_HOOK"
           else
             echo "NETLIFY_BUILD_HOOK not set; skipping Netlify trigger."
           fi
