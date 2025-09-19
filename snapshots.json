@@ -1,1 +1,6 @@
-{"version":1,"source":"https://blockchain.info/ticker","frequency":"weekly-utc","snapshots":[]}
+{
+  "version": 1,
+  "source": "https://blockchain.info/ticker",
+  "frequency": "weekly-utc",
+  "snapshots": []
+}
