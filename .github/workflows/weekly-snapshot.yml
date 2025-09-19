@@ -2,11 +2,12 @@ name: weekly-snapshot
 
 on:
   schedule:
-    - cron: "5 0 * * 0"
-  workflow_dispatch: {}
+    # Sundays 10:00 UTC — adjust if needed
+    - cron: "0 10 * * 0"
+  workflow_dispatch: {}  # allow manual runs
 
 permissions:
-  contents: write
+  contents: write  # needed to commit/push with GITHUB_TOKEN
 
 jobs:
   snapshot:
@@ -14,56 +15,73 @@ jobs:
     env:
       HIST_FILE: history/historical.json
       SRC_URL: https://blockchain.info/ticker
+      # Bind secret to env (avoids using `secrets` in `if:` expressions)
+      NETLIFY_BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Ensure directories exist
         run: |
+          set -euo pipefail
           mkdir -p history backups
 
-
+      # 1) Fetch raw API once (with retries) and validate it's JSON
       - name: Fetch ticker (raw)
         run: |
-            set -euo pipefail
-            curl -sS --retry 3 --retry-delay 2 "$SRC_URL" -o /tmp/ticker.json
-            # Valid JSON?
-            jq -e . /tmp/ticker.json > /dev/null
+          set -euo pipefail
+          curl -sS --retry 3 --retry-delay 2 "$SRC_URL" -o /tmp/ticker.json
+          # Valid JSON?
+          jq -e . /tmp/ticker.json > /dev/null
 
-      - name: Init historical.json if absent
+      # 2) Prepare base historical file if missing; validate existing
+      - name: Init or validate historical.json
         run: |
+          set -euo pipefail
           if [ ! -f "$HIST_FILE" ]; then
             echo '{"version":1,"source":"https://blockchain.info/ticker","frequency":"weekly-utc","snapshots":[]}' > "$HIST_FILE"
           else
-            # Ensure it's valid JSON
             jq -e . "$HIST_FILE" > /dev/null
+            # Basic schema keys present and snapshots is an array
+            jq -e 'has("version") and has("source") and has("frequency") and has("snapshots") and (.snapshots | type=="array")' "$HIST_FILE" > /dev/null
           fi
 
+      # 3) Build new snapshot (UTC date + epoch)
       - name: Build snapshot JSON
         id: build
         run: |
           set -euo pipefail
-          DATE_UTC="$(date -u +%F)"      # YYYY-MM-DD
-          TS_UTC="$(date -u +%s)"        # epoch seconds
-          # Construct { date, ts, data:<raw> } atomically
+          DATE_UTC="$(date -u +%F)"   # YYYY-MM-DD
+          TS_UTC="$(date -u +%s)"     # epoch seconds
+          # Construct { date, ts, data:<raw> }
           jq -n --arg date "$DATE_UTC" --argjson ts "$TS_UTC" --slurpfile data /tmp/ticker.json \
             '{date:$date, ts:$ts, data:$data[0]}' > /tmp/snapshot.json
-          echo "date=$DATE_UTC" >> $GITHUB_OUTPUT
+          echo "date=$DATE_UTC" >> "$GITHUB_OUTPUT"
 
+      # 4) Upsert by date, sort by date, and write atomically (minified)
       - name: Upsert + sort + atomic write
         run: |
           set -euo pipefail
           TMP_OUT="$(mktemp)"
-          # Remove existing entry with same date, append new one, sort by date (string sort is fine on YYYY-MM-DD)
+          # Remove any existing entry with the same date, append the new one, sort by date
           jq -c --slurpfile snap /tmp/snapshot.json '
             .snapshots |= ( [ .snapshots[] | select(.date != $snap[0].date) ] + $snap ) |
             .snapshots |= sort_by(.date)
           ' "$HIST_FILE" > "$TMP_OUT"
-          # Validate output structure again
+
+          # Validate output again (structure + monotonic sort sanity)
           jq -e 'has("version") and has("source") and has("frequency") and has("snapshots") and (.snapshots | type=="array")' "$TMP_OUT" > /dev/null
-          # Replace atomically
+          # Dates strictly non-decreasing (sorted)
+          if [ "$(jq -r '.snapshots[].date' "$TMP_OUT" | sort)" != "$(jq -r '.snapshots[].date' "$TMP_OUT")" ]; then
+            echo "Error: snapshots not sorted by date"
+            exit 1
+          fi
+
+          # Atomic replace
           mv "$TMP_OUT" "$HIST_FILE"
 
+      # 5) Optional monthly backup on the 1st of the month (UTC)
       - name: Monthly backup (1st of month)
         run: |
           set -euo pipefail
@@ -72,6 +90,7 @@ jobs:
             echo "Created backups/historical-$(date -u +%Y-%m).json"
           fi
 
+      # 6) Commit only if there are changes
       - name: Commit changes
         run: |
           set -euo pipefail
@@ -85,7 +104,13 @@ jobs:
             echo "No changes to commit."
           fi
 
+      # 7) Trigger Netlify build (only if hook env is present)
       - name: Trigger Netlify build
-        if: ${{ secrets.NETLIFY_BUILD_HOOK != '' }}
         run: |
-          curl -sS -X POST -d '{}' "${{ secrets.NETLIFY_BUILD_HOOK }}" || true
+          set -euo pipefail
+          if [ -n "${NETLIFY_BUILD_HOOK:-}" ]; then
+            echo "Triggering Netlify build hook at $(date -u --iso-8601=seconds)..."
+            curl -sS -X POST -d '{}' "$NETLIFY_BUILD_HOOK" || true
+          else
+            echo "NETLIFY_BUILD_HOOK not set; skipping Netlify trigger."
+          fi
