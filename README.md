@@ -2,8 +2,8 @@
 
 ## About
 
-Calls the blockchain.com API once a week to create a history of Fiat currency to BTC exchange rates.
-Use this to feed [Satoshi Power](https://satoshi-power.com/) with data once a week by appending to a json file.
+Calls the blockchain.com API once a week to create a history of Fiat currency to BTC exchange rates.  
+To be used on [Satoshi Power](https://satoshi-power.com/)
 
 ## What this does currently
 
