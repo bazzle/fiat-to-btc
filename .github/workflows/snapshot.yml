@@ -60,22 +60,22 @@ jobs:
           echo "date=$DATE_UTC" >> "$GITHUB_OUTPUT"
 
       # 4) Upsert by date, sort by date, and write atomically (minified)
-      - name: Upsert + sort + atomic write
+      - name: Upsert + sort (newest first) + atomic write
         run: |
           set -euo pipefail
           TMP_OUT="$(mktemp)"
           # Remove any existing entry with the same date, append the new one, sort by date
           jq -c --slurpfile snap /tmp/snapshot.json '
             .snapshots = (((.snapshots // []) | map(select(.date != $snap[0].date))) + $snap)
-            | .snapshots |= sort_by(.date)
+            | .snapshots |= (sort_by(.date) | reverse)
           ' "$HIST_FILE" > "$TMP_OUT"
 
 
           # Validate output again (structure + monotonic sort sanity)
           jq -e 'has("version") and has("source") and has("frequency") and has("snapshots") and (.snapshots | type=="array")' "$TMP_OUT" > /dev/null
-          # Dates strictly non-decreasing (sorted)
-          if [ "$(jq -r '.snapshots[].date' "$TMP_OUT" | sort)" != "$(jq -r '.snapshots[].date' "$TMP_OUT")" ]; then
-            echo "Error: snapshots not sorted by date"
+          # Dates strictly non-increasing (sorted descending)
+          if [ "$(jq -r '.snapshots[].date' "$TMP_OUT" | sort -r)" != "$(jq -r '.snapshots[].date' "$TMP_OUT")" ]; then
+            echo "Error: snapshots not sorted by date (descending)"
             exit 1
           fi
 
